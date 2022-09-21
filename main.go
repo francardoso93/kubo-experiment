@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	config "github.com/ipfs/go-ipfs-config"
@@ -99,7 +97,7 @@ func createNode(ctx context.Context, repoPath string) (icore.CoreAPI, error) {
 
 	nodeOptions := &core.BuildCfg{
 		Online:  true,
-		Routing: libp2p.DHTOption, // This option sets the node to be a full DHT node (both fetching and storing DHT Records)
+		Routing: libp2p.NilRouterOption, // This option sets the node to be a full DHT node (both fetching and storing DHT Records)
 		// Routing: libp2p.DHTClientOption, // This option sets the node to be a client DHT node (only fetching records)
 		Repo: repo,
 	}
@@ -181,40 +179,6 @@ func connectToPeers(ctx context.Context, ipfs icore.CoreAPI, peers []string) err
 	return nil
 }
 
-func getUnixfsFile(path string) (files.File, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	st, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := files.NewReaderPathFile(path, file, st)
-	if err != nil {
-		return nil, err
-	}
-
-	return f, nil
-}
-
-func getUnixfsNode(path string) (files.Node, error) {
-	st, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := files.NewSerialFile(path, false, st)
-	if err != nil {
-		return nil, err
-	}
-
-	return f, nil
-}
-
 /// -------
 
 var flagExp = flag.Bool("experimental", false, "enable experimental features")
@@ -247,96 +211,18 @@ func main() {
 
 	fmt.Println("IPFS node is running")
 
-	/// --- Part II: Adding a file and a directory to IPFS
-
-	fmt.Println("\n-- Adding and getting back files & directories --")
-
-	inputBasePath := "../example-folder/"
-	inputPathFile := inputBasePath + "ipfs.paper.draft3.pdf"
-	inputPathDirectory := inputBasePath + "test-dir"
-
-	someFile, err := getUnixfsNode(inputPathFile)
-	if err != nil {
-		panic(fmt.Errorf("Could not get File: %s", err))
-	}
-
-	cidFile, err := ipfs.Unixfs().Add(ctx, someFile)
-	if err != nil {
-		panic(fmt.Errorf("Could not add File: %s", err))
-	}
-
-	fmt.Printf("Added file to IPFS with CID %s\n", cidFile.String())
-
-	someDirectory, err := getUnixfsNode(inputPathDirectory)
-	if err != nil {
-		panic(fmt.Errorf("Could not get File: %s", err))
-	}
-
-	cidDirectory, err := ipfs.Unixfs().Add(ctx, someDirectory)
-	if err != nil {
-		panic(fmt.Errorf("Could not add Directory: %s", err))
-	}
-
-	fmt.Printf("Added directory to IPFS with CID %s\n", cidDirectory.String())
-
-	/// --- Part III: Getting the file and directory you added back
-
+	/// --- Part II: Getting a file from the IPFS Network
 	outputBasePath, err := ioutil.TempDir("", "example")
 	if err != nil {
 		panic(fmt.Errorf("could not create output dir (%v)", err))
 	}
 	fmt.Printf("output folder: %s\n", outputBasePath)
-	outputPathFile := outputBasePath + strings.Split(cidFile.String(), "/")[2]
-	outputPathDirectory := outputBasePath + strings.Split(cidDirectory.String(), "/")[2]
-
-	rootNodeFile, err := ipfs.Unixfs().Get(ctx, cidFile)
-	if err != nil {
-		panic(fmt.Errorf("Could not get file with CID: %s", err))
-	}
-
-	err = files.WriteTo(rootNodeFile, outputPathFile)
-	if err != nil {
-		panic(fmt.Errorf("Could not write out the fetched CID: %s", err))
-	}
-
-	fmt.Printf("Got file back from IPFS (IPFS path: %s) and wrote it to %s\n", cidFile.String(), outputPathFile)
-
-	rootNodeDirectory, err := ipfs.Unixfs().Get(ctx, cidDirectory)
-	if err != nil {
-		panic(fmt.Errorf("Could not get file with CID: %s", err))
-	}
-
-	err = files.WriteTo(rootNodeDirectory, outputPathDirectory)
-	if err != nil {
-		panic(fmt.Errorf("Could not write out the fetched CID: %s", err))
-	}
-
-	fmt.Printf("Got directory back from IPFS (IPFS path: %s) and wrote it to %s\n", cidDirectory.String(), outputPathDirectory)
-
-	/// --- Part IV: Getting a file from the IPFS Network
 
 	fmt.Println("\n-- Going to connect to a few nodes in the Network as bootstrappers --")
 
+	// TODO: Input EIPFS URL as parameter
 	bootstrapNodes := []string{
-		// IPFS Bootstrapper nodes.
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
-
-		// IPFS Cluster Pinning nodes
-		"/ip4/138.201.67.219/tcp/4001/p2p/QmUd6zHcbkbcs7SMxwLs48qZVX3vpcM8errYS7xEczwRMA",
-		"/ip4/138.201.67.219/udp/4001/quic/p2p/QmUd6zHcbkbcs7SMxwLs48qZVX3vpcM8errYS7xEczwRMA",
-		"/ip4/138.201.67.220/tcp/4001/p2p/QmNSYxZAiJHeLdkBg38roksAR9So7Y5eojks1yjEcUtZ7i",
-		"/ip4/138.201.67.220/udp/4001/quic/p2p/QmNSYxZAiJHeLdkBg38roksAR9So7Y5eojks1yjEcUtZ7i",
-		"/ip4/138.201.68.74/tcp/4001/p2p/QmdnXwLrC8p1ueiq2Qya8joNvk3TVVDAut7PrikmZwubtR",
-		"/ip4/138.201.68.74/udp/4001/quic/p2p/QmdnXwLrC8p1ueiq2Qya8joNvk3TVVDAut7PrikmZwubtR",
-		"/ip4/94.130.135.167/tcp/4001/p2p/QmUEMvxS2e7iDrereVYc5SWPauXPyNwxcy9BXZrC1QTcHE",
-		"/ip4/94.130.135.167/udp/4001/quic/p2p/QmUEMvxS2e7iDrereVYc5SWPauXPyNwxcy9BXZrC1QTcHE",
-
-		// You can add more nodes here, for example, another IPFS node you might have running locally, mine was:
-		// "/ip4/127.0.0.1/tcp/4010/p2p/QmZp2fhDLxjYue2RiUvLwT9MWdnbDxam32qYFnGmxZDh5L",
-		// "/ip4/127.0.0.1/udp/4010/quic/p2p/QmZp2fhDLxjYue2RiUvLwT9MWdnbDxam32qYFnGmxZDh5L",
+		"/dns4/dev.peer.ipfs-elastic-provider-aws.com/tcp/3000/ws/p2p/bafzbeia6mfzohhrwcvr3eaebk3gjqdwsidtfxhpnuwwxlpbwcx5z7sepei",
 	}
 
 	go func() {
@@ -346,7 +232,7 @@ func main() {
 		}
 	}()
 
-	exampleCIDStr := "QmUaoioqU7bxezBQZkUcgcSyokatMY71sxsALxQmRRrHrj"
+	exampleCIDStr := "QmU36ok7s5YY15Y2FP6E3UmqeroMQnegMELvHSYVenuXow"
 
 	fmt.Printf("Fetching a file from the network with CID %s\n", exampleCIDStr)
 	outputPath := outputBasePath + exampleCIDStr
