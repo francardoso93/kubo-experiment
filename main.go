@@ -97,8 +97,7 @@ func createNode(ctx context.Context, repoPath string) (icore.CoreAPI, error) {
 
 	nodeOptions := &core.BuildCfg{
 		Online:  true,
-		Routing: libp2p.NilRouterOption, // This option sets the node to be a full DHT node (both fetching and storing DHT Records)
-		// Routing: libp2p.DHTClientOption, // This option sets the node to be a client DHT node (only fetching records)
+		Routing: libp2p.NilRouterOption, // This option disables usage of DHT
 		Repo: repo,
 	}
 
@@ -186,7 +185,7 @@ var flagExp = flag.Bool("experimental", false, "enable experimental features")
 func main() {
 	flag.Parse()
 
-	/// --- Part I: Getting a IPFS node running
+	/// --- Part I: Getting an IPFS node running
 
 	fmt.Println("-- Getting an IPFS node running -- ")
 
@@ -218,7 +217,7 @@ func main() {
 	}
 	fmt.Printf("output folder: %s\n", outputBasePath)
 
-	fmt.Println("\n-- Going to connect to a few nodes in the Network as bootstrappers --")
+	fmt.Println("\n-- Going to connect to nodes in the Network --")
 
 	// TODO: Input EIPFS URL as parameter
 	bootstrapNodes := []string{
@@ -232,23 +231,22 @@ func main() {
 		}
 	}()
 
+	// TODO: Make it a list from external file
 	exampleCIDStr := "QmU36ok7s5YY15Y2FP6E3UmqeroMQnegMELvHSYVenuXow"
 
 	fmt.Printf("Fetching a file from the network with CID %s\n", exampleCIDStr)
-	outputPath := outputBasePath + exampleCIDStr
+	outputPath := outputBasePath + "/" + exampleCIDStr
 	testCID := icorepath.New(exampleCIDStr)
 
 	rootNode, err := ipfs.Unixfs().Get(ctx, testCID)
 	if err != nil {
-		panic(fmt.Errorf("Could not get file with CID: %s", err))
+		panic(fmt.Errorf("could not get file with CID: %s", err))
 	}
 
 	err = files.WriteTo(rootNode, outputPath)
 	if err != nil {
-		panic(fmt.Errorf("Could not write out the fetched CID: %s", err))
+		panic(fmt.Errorf("could not write out the fetched CID: %s", err))
 	}
 
 	fmt.Printf("Wrote the file to %s\n", outputPath)
-
-	fmt.Println("\nAll done! You just finalized your first tutorial on how to use go-ipfs as a library")
 }

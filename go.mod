@@ -1,4 +1,4 @@
-module gihub.com/francardoso93/kubo-experiment
+module github.com/francardoso93/kubo-experiment
 
 go 1.16
 
